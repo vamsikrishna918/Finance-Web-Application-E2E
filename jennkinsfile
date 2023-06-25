@@ -1,0 +1,71 @@
+pipeline{
+    agent any
+     
+    stages{
+        stage("Code checkout"){
+            steps{
+                git branch: 'main', url: 'https://github.com/vamsikrishna918/Finance-Web-Application-E2E'
+            }
+        }
+         stage("Build with Maven"){
+            steps{
+                echo "****building with maven****"
+                sh '''mvn clean package '''
+               
+            }
+        }
+        stage("Publish the report")
+        {
+            steps{
+          echo "generating test reports"
+          publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: '/var/lib/jenkins/workspace/Finance-web application/target/surefire-reports', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+            }
+        }
+        stage("Image prune"){
+            steps{
+                echo "****deleting the previous images***"
+                sh ' docker image prune -af '
+               
+            }
+        }
+    
+        
+        stage("Build Docker image"){
+            steps{
+                script {
+                 echo "****Creating Docker image****"    
+                 sh 'docker build -t vamsi12358/financeme .'
+                 sh 'docker tag vamsi12358/financeme vamsi12358/financemeapp:v1'
+                }
+            }
+        }
+        stage("Push Docker image to DokckerHub"){
+            steps{
+                script {
+                 echo "****Pushing Docker image to Hub****"   
+                
+                 withCredentials([string(credentialsId: 'dockercreds', variable: 'dockerhubpwd')]) {
+                  sh "docker login -u vamsi12358 -p ${dockerhubpwd} docker.io"       
+                  sh 'docker push vamsi12358/financemeapp:v1'
+                 }
+               
+                }
+            }
+        }
+        stage("Deploying to Test server"){
+            steps{
+                script {
+                 echo "****Deploying Application to Test server****"    
+                 ansiblePlaybook become: true, credentialsId: 'ansiblecreds', disableHostKeyChecking: true, inventory: '/etc/ansible/hosts', playbook: 'ansible-playbook.yml'
+                }
+            }
+        }
+        
+        
+          
+        
+        
+        
+        
+    }
+}
